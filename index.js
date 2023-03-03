@@ -1,11 +1,12 @@
 const inquirer = require('inquirer');
 const mysql = require('mysql2');
+require('dotenv').config();
 
 // Create a connection to the MySQL database
 const connection = mysql.createConnection({
   host: 'localhost',
   user: 'root',
-  password: 'Gt23!JR21!#*_',
+  password: process.env.MYSQL_PW,
   database: 'employees_db'
 });
 
@@ -56,40 +57,215 @@ connection.connect(err => {
   }
 
   function addEmployee() {
-    //inquirer prompt to add employee, mysql code to add employee to database, then loops back to main menu
-    inquirer.prompt([]).then();
-    mainMenu();
+    inquirer.prompt([
+      {
+        type: 'input',
+        name: 'firstName',
+        message: 'Enter the employee\'s first name:'
+      },
+      {
+        type: 'input',
+        name: 'lastName',
+        message: 'Enter the employee\'s last name:'
+      },
+      {
+        type: 'input',
+        name: 'title',
+        message: 'Enter the employee\'s job title:'
+      },
+      {
+        type: 'input',
+        name: 'department',
+        message: 'Enter the employee\'s department:',
+      },
+      {
+        type: 'number',
+        name: 'salary',
+        message: 'Enter the employee\'s salary:'
+      },
+      {
+        type: 'confirm',
+        name: 'isManager',
+        message: 'Is this employee a manager?'
+      }
+    ]).then(answers => {
+      if (!answers.isManager) {
+        // Look up the first manager in the employee's department
+        const query = `SELECT * FROM employees WHERE department = ? AND isManager = true LIMIT 1`;
+        connection.query(query, [answers.department], (err, results) => {
+          if (err) throw err;
+          const manager = results[0];
+          // Add the new employee to the database with the manager's ID
+          const query = `INSERT INTO employees (firstName, lastName, title, department, salary, isManager, manager) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+          connection.query(query, [answers.firstName, answers.lastName, answers.title, answers.department, answers.salary, false, `${manager.firstName} ${manager.lastName}`], (err, results) => {
+            if (err) throw err;
+            console.log(`${answers.firstName} ${answers.lastName} has been added to the database.`);
+            mainMenu();
+          });
+        });
+      } else if (!answers.isManager) {
+        // Look up the first manager in the employee's department
+        const query = `SELECT * FROM employees WHERE department = Management LIMIT 1`;
+        connection.query(query, (err, results) => {
+          if (err) throw err;
+          const manager = results[0];
+          // Add the new employee to the database with the manager's ID
+          const query = `INSERT INTO employees (firstName, lastName, title, department, salary, isManager, manager) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+          connection.query(query, [answers.firstName, answers.lastName, answers.title, answers.department, answers.salary, false, `${manager.firstName} ${manager.lastName}`], (err, results) => {
+            if (err) throw err;
+            console.log(`${answers.firstName} ${answers.lastName} has been added to the database.`);
+            mainMenu();
+          });
+        });
+      }
+    });
   }
 
   function viewAllEmployees() {
-    //mysql code to show all employees on the DB then loops back to main menu
+    const query = 'SELECT * FROM employees';
+    connection.query(query, (err, results) => {
+      if (err) {
+        console.error('Error fetching employees:', err);
+      } else {
+        console.table(results);
+      }
+      mainMenu();
+    });
   }
 
-  function updateEmployee () {
-    // code to update employees to be implimented
-    inquirer.prompt([]).then();
-    mainMenu();
+  function updateEmployee() {
+    // Ask user which employee they want to update
+    inquirer.prompt([
+      {
+        type: 'number',
+        name: 'employeeId',
+        message: 'What is the id of the employee you would like to update',
+      },
+    ]).then((employeeAnswer) => {
+      // Fetch selected employee's details from the database
+      const query = 'SELECT * FROM employees WHERE id = ?';
+      connection.query(query, [employeeAnswer.employeeId], (err, results) => {
+        if (err) throw err;
+  
+        // Ask user which detail they want to change
+        inquirer.prompt([
+          {
+            type: 'list',
+            name: 'column',
+            message: 'Which detail would you like to change?',
+            choices: Object.keys(results[0]).filter((col) => col !== 'id'),
+          },
+        ]).then((columnAnswer) => {
+          // Ask user for new value of the selected detail
+          inquirer.prompt([
+            {
+              type: 'input',
+              name: 'value',
+              message: `Enter new value for ${columnAnswer.column}:`,
+              default: results[0][columnAnswer.column],
+            },
+          ]).then((valueAnswer) => {
+            // Update employee record in the database
+            const updateQuery = `UPDATE employees SET ${columnAnswer.column} = ? WHERE id = ?`;
+            connection.query(updateQuery, [valueAnswer.value, employeeAnswer.employeeId], (err, updateResults) => {
+              if (err) throw err;
+              console.log(`${updateResults.affectedRows} record(s) updated`);
+              mainMenu();
+            });
+          });
+        });
+      });
+    });
   }
+
   function deleteEmployee() {
     //inquirer prompt to ask which employee do you want to delete with an are you sure prompt after asking which employee to delete
-    inquirer.prompt([]).then();
-    mainMenu();
-  }
+    inquirer.prompt([
+        {
+          type: 'number',
+          name: 'employee',
+          message: 'What is the id of the employee you would like to delete',
+        },
+        {
+          type: 'confirm',
+          name: 'confirm',
+          message: 'Are you sure you want to delete this employee?',
+          default: false
+        }
+      ]).then(answers => {
+        // Check if the user confirmed the delete
+        if (answers.confirm) {
+          // Delete the employee
+          const query = 'DELETE FROM employees WHERE id = ?';
+          connection.query(query, [answers.employee], (err, results) => {
+            if (err) {
+              console.error('Error deleting employee:', err);
+            } else {
+              console.log('Employee deleted successfully');
+            }
+            mainMenu();
+          });
+        } else {
+          // User did not confirm the delete, go back to main menu
+          mainMenu();
+        }
+      });
+    };
+
   function viewByDepartment() {
     //asks which department they would like to view and then mysql code to view all employees in said department
-    inquirer.prompt([]).then();
-    mainMenu();
+    inquirer.prompt([
+        {
+          type: "input",
+          name: "department",
+          message: "Enter the department to view:",
+        },
+      ]).then((answers) => {
+        const query = "SELECT * FROM employees WHERE department = ?";
+        connection.query(query, [answers.department], (err, results) => {
+          if (err) {
+            console.error("Error fetching employees by department:", err);
+          } else {
+            console.table(results);
+          }
+          mainMenu();
+        });
+      });
   }
   function viewManagement() {
     //views all employees where the isManager boolean = true
+    const query = 'SELECT * FROM employees WHERE isManager = true';
+    connection.query(query, (err, results) => {
+      if (err) {
+        console.error('Error fetching Management Team:', err);
+      } else {
+        console.table(results);
+      }
+      mainMenu();
+    });
   }
   function viewByRole() {
-    //asks what job title they would like to view and shows all employees with that job title
-    inquirer.prompt([]).then();
-    mainMenu();
+    inquirer.prompt([
+      {
+        type: "input",
+        name: "title",
+        message: "Enter the job title to view:",
+      },
+    ]).then((answers) => {
+      const query = "SELECT * FROM employees WHERE title = ?";
+      connection.query(query, [answers.title], (err, results) => {
+        if (err) {
+          console.error("Error fetching employees by role:", err);
+        } else {
+          console.table(results);
+        }
+        mainMenu();
+      });
+    });
   }
+
   function endProgram() {
-    //exits program
+    process.exit()
   }
 
   mainMenu()
