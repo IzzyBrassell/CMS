@@ -44,3 +44,7 @@ So the Eployee CMS uses only one table but still has all the functionality as li
 ```
 
 ## Video Walkthrough
+
+https://user-images.githubusercontent.com/115316007/222976941-6623eea3-3c42-4946-8a97-9182dde8a2d2.mp4
+
+
